@@ -92,7 +92,10 @@ function buildTeamStickers() {
 }
 
 // Sección de introducción del Mundial 2026
+// El "Roll of Honour" (campeones 1930-2022) es solo información del álbum,
+// no son figuritas coleccionables — por eso no aparece acá.
 const INTRO = [
+  { code: '00', section: 'Introducción', sectionCode: 'INTRO', label: 'Logo Panini' },
   { code: 'FWC01', section: 'Introducción', sectionCode: 'INTRO', label: 'Logo FIFA World Cup 26' },
   { code: 'FWC02', section: 'Introducción', sectionCode: 'INTRO', label: 'Trofeo' },
   { code: 'FWC03', section: 'Introducción', sectionCode: 'INTRO', label: 'Pelota oficial' },
@@ -101,37 +104,6 @@ const INTRO = [
   { code: 'FWC06', section: 'Introducción', sectionCode: 'INTRO', label: 'Zayu (mascota México)' },
   { code: 'FWC07', section: 'Introducción', sectionCode: 'INTRO', label: 'Clutch (mascota EE.UU.)' },
 ]
-
-// Roll of Honour — campeones de cada Mundial (1930 a 2022 = 22 mundiales)
-const ROLL_OF_HONOUR = [
-  ['1930', 'Uruguay'],
-  ['1934', 'Italia'],
-  ['1938', 'Italia'],
-  ['1950', 'Uruguay'],
-  ['1954', 'Alemania'],
-  ['1958', 'Brasil'],
-  ['1962', 'Brasil'],
-  ['1966', 'Inglaterra'],
-  ['1970', 'Brasil'],
-  ['1974', 'Alemania'],
-  ['1978', 'Argentina'],
-  ['1982', 'Italia'],
-  ['1986', 'Argentina'],
-  ['1990', 'Alemania'],
-  ['1994', 'Brasil'],
-  ['1998', 'Francia'],
-  ['2002', 'Brasil'],
-  ['2006', 'Italia'],
-  ['2010', 'España'],
-  ['2014', 'Alemania'],
-  ['2018', 'Francia'],
-  ['2022', 'Argentina'],
-].map(([year, champion], i) => ({
-  code: `ROH${String(i + 1).padStart(2, '0')}`,
-  section: 'Roll of Honour',
-  sectionCode: 'ROH',
-  label: `${year} — ${champion}`,
-}))
 
 // Sedes/estadios del Mundial 2026 (16 ciudades)
 const STADIUMS = [
@@ -168,7 +140,6 @@ const COCA_COLA = Array.from({ length: 12 }, (_, i) => ({
 
 export const STICKERS = [
   ...INTRO,
-  ...ROLL_OF_HONOUR,
   ...STADIUMS,
   ...COCA_COLA,
   ...buildTeamStickers(),
@@ -176,7 +147,6 @@ export const STICKERS = [
 
 export const SECTIONS = [
   { code: 'INTRO', name: 'Introducción' },
-  { code: 'ROH', name: 'Roll of Honour' },
   { code: 'EST', name: 'Estadios' },
   { code: 'CC', name: 'Coca-Cola Special' },
   ...TEAMS.map((t) => ({ code: t.code, name: t.name })),
