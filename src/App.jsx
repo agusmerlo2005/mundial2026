@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Login from './pages/Login'
 import MyAlbum from './pages/MyAlbum'
 import Friends from './pages/Friends'
+import Trades from './pages/Trades'
 import Navbar from './components/Navbar'
 import './App.css'
 
@@ -37,6 +38,14 @@ export default function App() {
             element={
               <Protected>
                 <Friends />
+              </Protected>
+            }
+          />
+          <Route
+            path="/intercambios"
+            element={
+              <Protected>
+                <Trades />
               </Protected>
             }
           />

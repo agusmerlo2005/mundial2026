@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { STICKERS } from '../data/stickers'
+import TradeModal from '../components/TradeModal'
 
 const STICKER_BY_CODE = Object.fromEntries(STICKERS.map((s) => [s.code, s]))
 const PAGE_SIZE = 1000
@@ -14,6 +15,7 @@ export default function Friends() {
   const [refreshing, setRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [view, setView] = useState('matches') // matches | byFriend
+  const [tradeWith, setTradeWith] = useState(null) // { user_id, username }
   const activeRef = useRef(true)
 
   const fetchAll = useCallback(
@@ -124,7 +126,7 @@ export default function Friends() {
     const map = new Map()
     for (const r of friendDupes) {
       if (!map.has(r.user_id)) {
-        map.set(r.user_id, { username: r.username, items: [] })
+        map.set(r.user_id, { user_id: r.user_id, username: r.username, items: [] })
       }
       map.get(r.user_id).items.push(r)
     }
@@ -178,12 +180,28 @@ export default function Friends() {
                     <div className="match-info">
                       <strong>{r.username}</strong> tiene <span>+{r.quantity - 1}</span>
                     </div>
+                    <button
+                      className="link"
+                      onClick={() =>
+                        setTradeWith({ user_id: r.user_id, username: r.username })
+                      }
+                    >
+                      Proponer intercambio
+                    </button>
                   </div>
                 )
               })}
             </div>
           )}
         </>
+      )}
+
+      {tradeWith && (
+        <TradeModal
+          friend={tradeWith}
+          allRows={rows}
+          onClose={() => setTradeWith(null)}
+        />
       )}
 
       {view === 'byFriend' && (
@@ -193,10 +211,18 @@ export default function Friends() {
             <p className="muted">Ningún amigo cargó repetidas todavía.</p>
           ) : (
             byFriend.map((f) => (
-              <div key={f.username} className="friend-block">
-                <h3>
-                  {f.username} · {f.items.length} figuritas repetidas
-                </h3>
+              <div key={f.user_id} className="friend-block">
+                <div className="friend-head">
+                  <h3>
+                    {f.username} · {f.items.length} figuritas repetidas
+                  </h3>
+                  <button
+                    className="btn-primary"
+                    onClick={() => setTradeWith({ user_id: f.user_id, username: f.username })}
+                  >
+                    Proponer intercambio
+                  </button>
+                </div>
                 <div className="grid">
                   {f.items.map((r) => {
                     const s = STICKER_BY_CODE[r.sticker_code]
