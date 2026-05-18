@@ -91,18 +91,19 @@ function buildTeamStickers() {
   return list
 }
 
-// Sección de introducción del Mundial 2026
+// Sección de introducción del Mundial 2026 — orden según álbum oficial
 // El "Roll of Honour" (campeones 1930-2022) es solo información del álbum,
 // no son figuritas coleccionables — por eso no aparece acá.
 const INTRO = [
-  { code: '00', section: 'Introducción', sectionCode: 'INTRO', label: 'Logo Panini' },
-  { code: 'FWC01', section: 'Introducción', sectionCode: 'INTRO', label: 'Logo FIFA World Cup 26' },
-  { code: 'FWC02', section: 'Introducción', sectionCode: 'INTRO', label: 'Trofeo' },
-  { code: 'FWC03', section: 'Introducción', sectionCode: 'INTRO', label: 'Pelota oficial' },
-  { code: 'FWC04', section: 'Introducción', sectionCode: 'INTRO', label: 'Póster oficial' },
-  { code: 'FWC05', section: 'Introducción', sectionCode: 'INTRO', label: 'Maple (mascota Canadá)' },
-  { code: 'FWC06', section: 'Introducción', sectionCode: 'INTRO', label: 'Zayu (mascota México)' },
-  { code: 'FWC07', section: 'Introducción', sectionCode: 'INTRO', label: 'Clutch (mascota EE.UU.)' },
+  { code: '00', section: 'Introducción', sectionCode: 'INTRO', label: 'Logo Panini (We Are Panini)' },
+  { code: 'FWC01', section: 'Introducción', sectionCode: 'INTRO', label: 'Trofeo 1' },
+  { code: 'FWC02', section: 'Introducción', sectionCode: 'INTRO', label: 'Trofeo 2' },
+  { code: 'FWC03', section: 'Introducción', sectionCode: 'INTRO', label: 'Mascotas (Maple, Zavu, Clutch)' },
+  { code: 'FWC04', section: 'Introducción', sectionCode: 'INTRO', label: 'We Are FIFA' },
+  { code: 'FWC05', section: 'Introducción', sectionCode: 'INTRO', label: 'Pelota oficial' },
+  { code: 'FWC06', section: 'Introducción', sectionCode: 'INTRO', label: 'Logo FIFA WC 26 — rojo' },
+  { code: 'FWC07', section: 'Introducción', sectionCode: 'INTRO', label: 'Logo FIFA WC 26 — verde' },
+  { code: 'FWC08', section: 'Introducción', sectionCode: 'INTRO', label: 'Logo FIFA WC 26 — azul' },
 ]
 
 // Sedes/estadios del Mundial 2026 (16 ciudades)
@@ -130,8 +131,8 @@ const STADIUMS = [
   label: `${s.city} — ${s.stadium}`,
 }))
 
-// Coca-Cola Special — 12 figuritas exclusivas
-const COCA_COLA = Array.from({ length: 12 }, (_, i) => ({
+// Coca-Cola Special — 14 figuritas exclusivas
+const COCA_COLA = Array.from({ length: 14 }, (_, i) => ({
   code: `CC${String(i + 1).padStart(2, '0')}`,
   section: 'Coca-Cola Special',
   sectionCode: 'CC',
