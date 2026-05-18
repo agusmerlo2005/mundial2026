@@ -1,49 +1,114 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { STICKERS } from '../data/stickers'
 
 const STICKER_BY_CODE = Object.fromEntries(STICKERS.map((s) => [s.code, s]))
+const PAGE_SIZE = 1000
 
 export default function Friends() {
   const { user } = useAuth()
   const [rows, setRows] = useState([]) // [{user_id, sticker_code, quantity, username}]
   const [myMissing, setMyMissing] = useState(new Set())
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState(null)
   const [view, setView] = useState('matches') // matches | byFriend
+  const activeRef = useRef(true)
 
-  useEffect(() => {
-    if (!user) return
-    let active = true
-    setLoading(true)
+  const fetchAll = useCallback(
+    async (isInitial = false) => {
+      if (!user) return
+      if (isInitial) setLoading(true)
+      else setRefreshing(true)
 
-    Promise.all([
-      supabase.from('user_stickers').select('user_id, sticker_code, quantity'),
-      supabase.from('profiles').select('id, username'),
-      supabase
-        .from('user_stickers')
-        .select('sticker_code, quantity')
-        .eq('user_id', user.id),
-    ]).then(([all, profiles, mine]) => {
-      if (!active) return
+      // Paginamos manualmente para esquivar el tope por defecto de 1000 filas
+      // de PostgREST en Supabase: si hay más, no se ven todas las repetidas.
+      const all = []
+      let from = 0
+      while (true) {
+        const { data, error } = await supabase
+          .from('user_stickers')
+          .select('user_id, sticker_code, quantity')
+          .range(from, from + PAGE_SIZE - 1)
+        if (error) {
+          console.error('user_stickers fetch error', error)
+          break
+        }
+        const batch = data || []
+        all.push(...batch)
+        if (batch.length < PAGE_SIZE) break
+        from += PAGE_SIZE
+      }
+
+      const [profilesRes, mineRes] = await Promise.all([
+        supabase.from('profiles').select('id, username'),
+        supabase
+          .from('user_stickers')
+          .select('sticker_code, quantity')
+          .eq('user_id', user.id),
+      ])
+
+      if (profilesRes.error) console.error('profiles fetch error', profilesRes.error)
+      if (mineRes.error) console.error('mine fetch error', mineRes.error)
+
+      if (!activeRef.current) return
+
       const profileMap = Object.fromEntries(
-        (profiles.data || []).map((p) => [p.id, p.username])
+        (profilesRes.data || []).map((p) => [p.id, p.username])
       )
-      const enriched = (all.data || []).map((r) => ({
+      const enriched = all.map((r) => ({
         ...r,
         username: profileMap[r.user_id] || 'Anónimo',
       }))
       setRows(enriched)
 
-      const ownedCodes = new Set((mine.data || []).map((r) => r.sticker_code))
+      const ownedCodes = new Set((mineRes.data || []).map((r) => r.sticker_code))
       const missing = new Set(
         STICKERS.map((s) => s.code).filter((c) => !ownedCodes.has(c))
       )
       setMyMissing(missing)
+      setLastUpdated(new Date())
 
-      setLoading(false)
-    })
-  }, [user])
+      if (isInitial) setLoading(false)
+      else setRefreshing(false)
+    },
+    [user]
+  )
+
+  useEffect(() => {
+    activeRef.current = true
+    if (!user) return
+    fetchAll(true)
+    return () => {
+      activeRef.current = false
+    }
+  }, [user, fetchAll])
+
+  // Refrescar cuando el usuario vuelve a la pestaña
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible') fetchAll(false)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [fetchAll])
+
+  // Tiempo real: si algún amigo agrega/edita repetidas, refrescamos
+  useEffect(() => {
+    if (!user) return
+    const channel = supabase
+      .channel('user_stickers_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_stickers' },
+        () => fetchAll(false)
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user, fetchAll])
 
   const friendDupes = useMemo(
     () => rows.filter((r) => r.user_id !== user?.id && r.quantity > 1),
@@ -85,6 +150,14 @@ export default function Friends() {
             Por amigo
           </button>
         </div>
+        <button
+          className="pill"
+          onClick={() => fetchAll(false)}
+          disabled={refreshing}
+          title={lastUpdated ? `Última actualización: ${lastUpdated.toLocaleTimeString()}` : ''}
+        >
+          {refreshing ? 'Actualizando…' : 'Actualizar'}
+        </button>
       </div>
 
       {view === 'matches' && (
