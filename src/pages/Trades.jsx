@@ -1,18 +1,39 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { STICKERS } from '../data/stickers'
+import { STICKERS, TEAMS } from '../data/stickers'
 
-const STICKER_BY_CODE = Object.fromEntries(STICKERS.map((s) => [s.code, s]))
+const STICKER_BY_CODE = Object.fromEntries(STICKERS.map(s => [s.code, s]))
+const TEAM_BY_CODE    = Object.fromEntries(TEAMS.map(t => [t.code, t]))
+const FLAG_BASE       = 'https://flagcdn.com/w40'
+
+function groupByTeam(codes) {
+  const map = new Map()
+  for (const code of codes) {
+    const s = STICKER_BY_CODE[code]
+    if (!s) continue
+    if (!map.has(s.sectionCode)) {
+      map.set(s.sectionCode, { sectionCode: s.sectionCode, section: s.section, stickers: [] })
+    }
+    map.get(s.sectionCode).stickers.push(s)
+  }
+  return Array.from(map.values())
+}
+
+function fmtDate(iso) {
+  return new Date(iso).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+// ─── Main page ──────────────────────────────────────────────────────────────
 
 export default function Trades() {
   const { user } = useAuth()
-  const [trades, setTrades] = useState([])
+  const [trades,   setTrades]   = useState([])
   const [profiles, setProfiles] = useState({})
-  const [loading, setLoading] = useState(true)
-  const [view, setView] = useState('received') // received | sent | history
-  const [acting, setActing] = useState(null) // trade id being acted on
-  const [error, setError] = useState(null)
+  const [loading,  setLoading]  = useState(true)
+  const [view,     setView]     = useState('received')
+  const [acting,   setActing]   = useState(null)
+  const [error,    setError]    = useState(null)
   const activeRef = useRef(true)
 
   const fetchAll = useCallback(async () => {
@@ -23,24 +44,16 @@ export default function Trades() {
       .or(`from_user.eq.${user.id},to_user.eq.${user.id}`)
       .order('created_at', { ascending: false })
     if (!activeRef.current) return
-    if (error) {
-      console.error(error)
-      return
-    }
+    if (error) { console.error(error); return }
     setTrades(data || [])
 
     const ids = new Set()
-    for (const t of data || []) {
-      ids.add(t.from_user)
-      ids.add(t.to_user)
-    }
+    for (const t of data || []) { ids.add(t.from_user); ids.add(t.to_user) }
     if (ids.size) {
       const { data: profs } = await supabase
-        .from('profiles')
-        .select('id, username')
-        .in('id', Array.from(ids))
+        .from('profiles').select('id, username').in('id', Array.from(ids))
       if (!activeRef.current) return
-      setProfiles(Object.fromEntries((profs || []).map((p) => [p.id, p.username])))
+      setProfiles(Object.fromEntries((profs || []).map(p => [p.id, p.username])))
     }
     setLoading(false)
   }, [user])
@@ -48,30 +61,20 @@ export default function Trades() {
   useEffect(() => {
     activeRef.current = true
     fetchAll()
-    return () => {
-      activeRef.current = false
-    }
+    return () => { activeRef.current = false }
   }, [fetchAll])
 
   useEffect(() => {
     if (!user) return
-    const channel = supabase
+    const ch = supabase
       .channel('trade_proposals_changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'trade_proposals' },
-        () => fetchAll()
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trade_proposals' }, fetchAll)
       .subscribe()
-    return () => {
-      supabase.removeChannel(channel)
-    }
+    return () => { supabase.removeChannel(ch) }
   }, [user, fetchAll])
 
   const { received, sent, history } = useMemo(() => {
-    const received = []
-    const sent = []
-    const history = []
+    const received = [], sent = [], history = []
     for (const t of trades) {
       if (t.status === 'pending') {
         if (t.to_user === user?.id) received.push(t)
@@ -81,6 +84,17 @@ export default function Trades() {
       }
     }
     return { received, sent, history }
+  }, [trades, user])
+
+  const byFriend = useMemo(() => {
+    const pending = trades.filter(t => t.status === 'pending')
+    const map = new Map()
+    for (const t of pending) {
+      const other = t.from_user === user.id ? t.to_user : t.from_user
+      if (!map.has(other)) map.set(other, { userId: other, trades: [] })
+      map.get(other).trades.push(t)
+    }
+    return Array.from(map.values()).sort((a, b) => b.trades.length - a.trades.length)
   }, [trades, user])
 
   async function act(rpc, id) {
@@ -93,23 +107,43 @@ export default function Trades() {
 
   if (loading) return <div className="page"><p className="muted">Cargando…</p></div>
 
-  const tabs = [
-    ['received', `Recibidos (${received.length})`],
-    ['sent', `Enviados (${sent.length})`],
-    ['history', `Historial (${history.length})`],
-  ]
+  const urgentCount = received.length
 
   return (
     <div className="page">
+      {urgentCount > 0 && (
+        <div className="trade-alert">
+          <span>
+            Tenés <strong>{urgentCount}</strong> propuesta{urgentCount !== 1 ? 's' : ''} esperando tu respuesta
+          </span>
+          <button
+            className={`pill ${view === 'received' ? 'active' : ''}`}
+            onClick={() => setView('received')}
+          >
+            Ver ahora
+          </button>
+        </div>
+      )}
+
       <div className="toolbar">
         <div className="filter-pills">
-          {tabs.map(([k, l]) => (
+          {[
+            ['received', 'Recibidos',  received.length, true],
+            ['sent',     'Enviados',   sent.length,     false],
+            ['byFriend', 'Por amigo',  byFriend.length, false],
+            ['history',  'Historial',  history.length,  false],
+          ].map(([k, label, count, urgent]) => (
             <button
               key={k}
               className={`pill ${view === k ? 'active' : ''}`}
               onClick={() => setView(k)}
             >
-              {l}
+              {label}
+              {count > 0 && (
+                <span className={`pill-badge ${urgent && count > 0 ? 'pill-badge-urgent' : ''}`}>
+                  {count}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -118,116 +152,168 @@ export default function Trades() {
       {error && <p className="auth-msg err">{error}</p>}
 
       {view === 'received' && (
-        <TradeList
-          trades={received}
-          profiles={profiles}
-          perspective="received"
-          userId={user.id}
-          actions={(t) => (
-            <>
-              <button
-                className="btn-primary"
-                disabled={acting === t.id}
-                onClick={() => act('accept_trade', t.id)}
-              >
-                {acting === t.id ? 'Procesando…' : 'Aceptar'}
-              </button>
-              <button
-                className="btn-ghost"
-                disabled={acting === t.id}
-                onClick={() => act('reject_trade', t.id)}
-              >
-                Rechazar
-              </button>
-            </>
-          )}
-          empty="No tenés intercambios pendientes por aceptar."
-        />
+        received.length === 0
+          ? <Empty msg="No tenés intercambios pendientes por aceptar." />
+          : <div className="trade-feed-v2">
+              {received.map(t => (
+                <TradeCard key={t.id} trade={t} profiles={profiles} userId={user.id}
+                  actions={id => (
+                    <>
+                      <button className="btn-primary" disabled={acting === id} onClick={() => act('accept_trade', id)}>
+                        {acting === id ? 'Procesando…' : 'Aceptar'}
+                      </button>
+                      <button className="btn-ghost" disabled={acting === id} onClick={() => act('reject_trade', id)}>
+                        Rechazar
+                      </button>
+                    </>
+                  )}
+                />
+              ))}
+            </div>
       )}
 
       {view === 'sent' && (
-        <TradeList
-          trades={sent}
-          profiles={profiles}
-          perspective="sent"
-          userId={user.id}
-          actions={(t) => (
-            <button
-              className="btn-ghost"
-              disabled={acting === t.id}
-              onClick={() => act('cancel_trade', t.id)}
-            >
-              Cancelar
-            </button>
-          )}
-          empty="No tenés propuestas pendientes enviadas."
-        />
+        sent.length === 0
+          ? <Empty msg="No tenés propuestas enviadas pendientes." />
+          : <div className="trade-feed-v2">
+              {sent.map(t => (
+                <TradeCard key={t.id} trade={t} profiles={profiles} userId={user.id}
+                  actions={id => (
+                    <button className="btn-ghost" disabled={acting === id} onClick={() => act('cancel_trade', id)}>
+                      Cancelar
+                    </button>
+                  )}
+                />
+              ))}
+            </div>
+      )}
+
+      {view === 'byFriend' && (
+        byFriend.length === 0
+          ? <Empty msg="No hay intercambios pendientes." />
+          : byFriend.map(({ userId: fId, trades: fTrades }) => {
+              const isSent = (t) => t.from_user === user.id
+              return (
+                <div key={fId} className="friend-trade-block">
+                  <div className="friend-trade-block-head">
+                    <span className="friend-trade-block-name">{profiles[fId] || 'Anónimo'}</span>
+                    <span className="tag dupe-tag">
+                      {fTrades.length} propuesta{fTrades.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="trade-feed-v2">
+                    {fTrades.map(t => (
+                      <TradeCard key={t.id} trade={t} profiles={profiles} userId={user.id} hideName
+                        actions={id => isSent(t) ? (
+                          <button className="btn-ghost" disabled={acting === id} onClick={() => act('cancel_trade', id)}>
+                            Cancelar
+                          </button>
+                        ) : (
+                          <>
+                            <button className="btn-primary" disabled={acting === id} onClick={() => act('accept_trade', id)}>
+                              {acting === id ? 'Procesando…' : 'Aceptar'}
+                            </button>
+                            <button className="btn-ghost" disabled={acting === id} onClick={() => act('reject_trade', id)}>
+                              Rechazar
+                            </button>
+                          </>
+                        )}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            })
       )}
 
       {view === 'history' && (
-        <TradeList
-          trades={history}
-          profiles={profiles}
-          perspective="history"
-          userId={user.id}
-          empty="Todavía no hay intercambios cerrados."
-        />
+        history.length === 0
+          ? <Empty msg="Todavía no hay intercambios cerrados." />
+          : <div className="trade-feed-v2">
+              {history.map(t => (
+                <TradeCard key={t.id} trade={t} profiles={profiles} userId={user.id} />
+              ))}
+            </div>
       )}
     </div>
   )
 }
 
-function TradeList({ trades, profiles, perspective, userId, actions, empty }) {
-  if (trades.length === 0) return <p className="muted">{empty}</p>
+// ─── Trade card ──────────────────────────────────────────────────────────────
+
+function TradeCard({ trade, profiles, userId, actions, hideName }) {
+  const iAmSender  = trade.from_user === userId
+  const counterId  = iAmSender ? trade.to_user : trade.from_user
+  const name       = profiles[counterId] || 'Anónimo'
+  const myGive     = iAmSender ? trade.give_codes    : trade.receive_codes
+  const myReceive  = iAmSender ? trade.receive_codes : trade.give_codes
+  const giveGroups = groupByTeam(myGive)
+  const rcvGroups  = groupByTeam(myReceive)
+
   return (
-    <div className="trade-feed">
-      {trades.map((t) => {
-        const iAmSender = t.from_user === userId
-        const counterId = iAmSender ? t.to_user : t.from_user
-        const counterName = profiles[counterId] || 'Anónimo'
-        // Lo que YO doy y YO recibo desde mi punto de vista
-        const myGive = iAmSender ? t.give_codes : t.receive_codes
-        const myReceive = iAmSender ? t.receive_codes : t.give_codes
-        return (
-          <div key={t.id} className={`trade-card status-${t.status}`}>
-            <div className="trade-card-head">
-              <div>
-                <strong>{iAmSender ? `Para ${counterName}` : `De ${counterName}`}</strong>
-                <span className="muted trade-date">
-                  {new Date(t.created_at).toLocaleString()}
-                </span>
-              </div>
-              <StatusBadge status={t.status} />
-            </div>
-            <div className="trade-columns">
-              <TradeSide title="Doy" codes={myGive} accent="amber" />
-              <TradeSide title="Recibo" codes={myReceive} accent="primary" />
-            </div>
-            {actions && perspective !== 'history' && t.status === 'pending' && (
-              <div className="trade-card-foot">{actions(t)}</div>
-            )}
+    <div className={`tc status-${trade.status}`}>
+      {/* Head */}
+      <div className="tc-head">
+        {!hideName ? (
+          <div className="tc-who">
+            <span className="tc-dir">{iAmSender ? 'Para' : 'De'}</span>
+            <span className="tc-name">{name}</span>
           </div>
-        )
-      })}
+        ) : (
+          <div className="tc-who">
+            <span className="tc-dir">{iAmSender ? 'Enviado' : 'Recibido'}</span>
+          </div>
+        )}
+        <div className="tc-meta">
+          <StatusBadge status={trade.status} />
+          <span className="muted tc-date">{fmtDate(trade.created_at)}</span>
+        </div>
+      </div>
+
+      {/* Body: two panels */}
+      <div className="tc-body">
+        <StickerPanel title="Doy" count={myGive.length} groups={giveGroups} side="give" />
+        <div className="tc-sep">⇄</div>
+        <StickerPanel title="Recibo" count={myReceive.length} groups={rcvGroups} side="receive" />
+      </div>
+
+      {/* Actions */}
+      {actions && trade.status === 'pending' && (
+        <div className="tc-foot">{actions(trade.id)}</div>
+      )}
     </div>
   )
 }
 
-function TradeSide({ title, codes, accent }) {
+function StickerPanel({ title, count, groups, side }) {
   return (
-    <div className="trade-col">
-      <h4>
-        {title} ({codes.length})
-      </h4>
-      <div className="trade-list compact">
-        {codes.map((c) => {
-          const s = STICKER_BY_CODE[c]
+    <div className={`tc-panel tc-panel-${side}`}>
+      <div className="tc-panel-head">
+        <span className="tc-panel-title">{title}</span>
+        <span className={`tag ${side === 'give' ? 'dupe-tag' : 'match-tag'}`}>{count}</span>
+      </div>
+      <div className="tc-groups">
+        {groups.map(g => {
+          const team = TEAM_BY_CODE[g.sectionCode]
           return (
-            <div key={c} className={`trade-item static ${accent}`}>
-              <div className="trade-item-body">
-                <div className="sticker-code">{s?.code || c}</div>
-                <div className="sticker-label">{s?.label || '—'}</div>
-                <div className="sticker-section">{s?.section || ''}</div>
+            <div key={g.sectionCode} className="tc-group">
+              <div className="tc-group-head">
+                {team ? (
+                  <img
+                    src={`${FLAG_BASE}/${team.iso2}.png`}
+                    alt={team.name}
+                    className="tc-group-flag"
+                    onError={e => { e.target.style.display = 'none' }}
+                  />
+                ) : (
+                  <span className="tc-group-icon">📖</span>
+                )}
+                <span className="tc-group-name">{g.section}</span>
+              </div>
+              <div className="tc-chips">
+                {g.stickers.map(s => (
+                  <span key={s.code} className="tc-chip">{s.label}</span>
+                ))}
               </div>
             </div>
           )
@@ -239,11 +325,15 @@ function TradeSide({ title, codes, accent }) {
 
 function StatusBadge({ status }) {
   const map = {
-    pending: ['Pendiente', 'dupe-tag'],
-    accepted: ['Aceptado', 'owned-tag'],
-    rejected: ['Rechazado', 'missing-tag'],
+    pending:   ['Pendiente', 'dupe-tag'],
+    accepted:  ['Aceptado',  'owned-tag'],
+    rejected:  ['Rechazado', 'missing-tag'],
     cancelled: ['Cancelado', 'missing-tag'],
   }
   const [label, cls] = map[status] || [status, 'dupe-tag']
   return <span className={`tag ${cls}`}>{label}</span>
+}
+
+function Empty({ msg }) {
+  return <p className="muted" style={{ marginTop: 24 }}>{msg}</p>
 }
