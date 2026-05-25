@@ -47,6 +47,7 @@ export default function Navbar() {
             Intercambios
             {pending > 0 && <span className="nav-badge">{pending}</span>}
           </NavLink>
+          <NavLink to="/estadisticas">Estadísticas</NavLink>
         </div>
         <div className="nav-user">
           <span className="who">{name}</span>

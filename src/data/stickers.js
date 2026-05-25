@@ -120,7 +120,7 @@ const STADIUMS = [
   { city: 'Monterrey', stadium: 'Estadio BBVA' },
   { city: 'Nueva York/Nueva Jersey', stadium: 'MetLife Stadium' },
   { city: 'Filadelfia', stadium: 'Lincoln Financial Field' },
-  { city: 'San Francisco Bay', stadium: 'Levi’s Stadium' },
+  { city: 'San Francisco Bay', stadium: "Levi's Stadium" },
   { city: 'Seattle', stadium: 'Lumen Field' },
   { city: 'Toronto', stadium: 'BMO Field' },
   { city: 'Vancouver', stadium: 'BC Place' },

@@ -536,6 +536,74 @@
   padding-top: 12px;
 }
 
+/* ---------- Stats page ---------- */
+.stats-summary-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+.sum-of {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.stats-table,
+.stats-teams {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stats-row,
+.stats-team-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+.stats-row-me {
+  border-color: var(--primary);
+}
+.stats-team-row.complete {
+  border-color: var(--green);
+}
+.stats-rank {
+  font-weight: 700;
+  font-size: 14px;
+  min-width: 28px;
+  color: var(--muted);
+}
+.stats-name {
+  font-weight: 600;
+  font-size: 14px;
+  min-width: 120px;
+}
+.stats-team-name {
+  font-size: 14px;
+  min-width: 160px;
+}
+.stats-bar-wrap {
+  flex: 1;
+  height: 8px;
+  background: var(--panel-2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.stats-bar-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--green));
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+.stats-pct {
+  font-weight: 700;
+  font-size: 14px;
+  min-width: 38px;
+  text-align: right;
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 600px) {
   .summary {

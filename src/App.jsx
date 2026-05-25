@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import MyAlbum from './pages/MyAlbum'
 import Friends from './pages/Friends'
 import Trades from './pages/Trades'
+import Stats from './pages/Stats'
 import Navbar from './components/Navbar'
 import './App.css'
 
@@ -46,6 +47,14 @@ export default function App() {
             element={
               <Protected>
                 <Trades />
+              </Protected>
+            }
+          />
+          <Route
+            path="/estadisticas"
+            element={
+              <Protected>
+                <Stats />
               </Protected>
             }
           />

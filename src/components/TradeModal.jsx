@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { STICKERS } from '../data/stickers'
@@ -11,6 +11,29 @@ export default function TradeModal({ friend, allRows, onClose }) {
   const [receiveSel, setReceiveSel] = useState(new Set())
   const [sending, setSending] = useState(false)
   const [error, setError] = useState(null)
+  const [reservedGive, setReservedGive] = useState(new Set())
+  const [reservedReceive, setReservedReceive] = useState(new Set())
+
+  // Traer figuritas ya comprometidas en propuestas pendientes para no mostrarlas de nuevo
+  useEffect(() => {
+    async function fetchReserved() {
+      const { data } = await supabase
+        .from('trade_proposals')
+        .select('give_codes, receive_codes')
+        .eq('from_user', user.id)
+        .eq('status', 'pending')
+      if (!data) return
+      const give = new Set()
+      const receive = new Set()
+      for (const row of data) {
+        for (const c of row.give_codes) give.add(c)
+        for (const c of row.receive_codes) receive.add(c)
+      }
+      setReservedGive(give)
+      setReservedReceive(receive)
+    }
+    fetchReserved()
+  }, [user.id])
 
   const { mineToOffer, friendToReceive } = useMemo(() => {
     const friendOwned = new Set()
@@ -29,19 +52,19 @@ export default function TradeModal({ friend, allRows, onClose }) {
     }
 
     const mineToOffer = myDupes
-      .filter((r) => !friendOwned.has(r.sticker_code))
+      .filter((r) => !friendOwned.has(r.sticker_code) && !reservedGive.has(r.sticker_code))
       .map((r) => ({ ...r, sticker: STICKER_BY_CODE[r.sticker_code] }))
       .filter((r) => r.sticker)
       .sort((a, b) => a.sticker.code.localeCompare(b.sticker.code))
 
     const friendToReceive = friendDupes
-      .filter((r) => !myOwned.has(r.sticker_code))
+      .filter((r) => !myOwned.has(r.sticker_code) && !reservedReceive.has(r.sticker_code))
       .map((r) => ({ ...r, sticker: STICKER_BY_CODE[r.sticker_code] }))
       .filter((r) => r.sticker)
       .sort((a, b) => a.sticker.code.localeCompare(b.sticker.code))
 
     return { mineToOffer, friendToReceive }
-  }, [allRows, friend.user_id, user.id])
+  }, [allRows, friend.user_id, user.id, reservedGive, reservedReceive])
 
   function toggle(setFn, set, code) {
     const next = new Set(set)
