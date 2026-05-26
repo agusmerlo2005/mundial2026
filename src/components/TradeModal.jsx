@@ -13,27 +13,46 @@ export default function TradeModal({ friend, allRows, onClose }) {
   const [error, setError] = useState(null)
   const [reservedGive, setReservedGive] = useState(new Set())
   const [reservedReceive, setReservedReceive] = useState(new Set())
+  const [reservedByFriend, setReservedByFriend] = useState(new Set())
 
   // Traer figuritas ya comprometidas en propuestas pendientes para no mostrarlas de nuevo
   useEffect(() => {
     async function fetchReserved() {
-      const { data } = await supabase
+      // Mis propias propuestas pendientes (lo que yo ya ofrecí o pedí)
+      const { data: mine } = await supabase
         .from('trade_proposals')
         .select('give_codes, receive_codes')
         .eq('from_user', user.id)
         .eq('status', 'pending')
-      if (!data) return
-      const give = new Set()
-      const receive = new Set()
-      for (const row of data) {
-        for (const c of row.give_codes) give.add(c)
-        for (const c of row.receive_codes) receive.add(c)
+      if (mine) {
+        const give = new Set()
+        const receive = new Set()
+        for (const row of mine) {
+          for (const c of row.give_codes) give.add(c)
+          for (const c of row.receive_codes) receive.add(c)
+        }
+        setReservedGive(give)
+        setReservedReceive(receive)
       }
-      setReservedGive(give)
-      setReservedReceive(receive)
+
+      // Figuritas del amigo ya comprometidas en otros intercambios pendientes
+      // (alguien más ya las pidió, no las podemos pedir nosotros también)
+      const { data: friendPending } = await supabase
+        .from('trade_proposals')
+        .select('receive_codes')
+        .eq('to_user', friend.user_id)
+        .neq('from_user', user.id)
+        .eq('status', 'pending')
+      if (friendPending) {
+        const reserved = new Set()
+        for (const row of friendPending) {
+          for (const c of row.receive_codes) reserved.add(c)
+        }
+        setReservedByFriend(reserved)
+      }
     }
     fetchReserved()
-  }, [user.id])
+  }, [user.id, friend.user_id])
 
   const { mineToOffer, friendToReceive } = useMemo(() => {
     const friendOwned = new Set()
@@ -58,13 +77,13 @@ export default function TradeModal({ friend, allRows, onClose }) {
       .sort((a, b) => a.sticker.code.localeCompare(b.sticker.code))
 
     const friendToReceive = friendDupes
-      .filter((r) => !myOwned.has(r.sticker_code) && !reservedReceive.has(r.sticker_code))
+      .filter((r) => !myOwned.has(r.sticker_code) && !reservedReceive.has(r.sticker_code) && !reservedByFriend.has(r.sticker_code))
       .map((r) => ({ ...r, sticker: STICKER_BY_CODE[r.sticker_code] }))
       .filter((r) => r.sticker)
       .sort((a, b) => a.sticker.code.localeCompare(b.sticker.code))
 
     return { mineToOffer, friendToReceive }
-  }, [allRows, friend.user_id, user.id, reservedGive, reservedReceive])
+  }, [allRows, friend.user_id, user.id, reservedGive, reservedReceive, reservedByFriend])
 
   function toggle(setFn, set, code) {
     const next = new Set(set)
@@ -79,11 +98,10 @@ export default function TradeModal({ friend, allRows, onClose }) {
   async function send() {
     setError(null)
     setSending(true)
-    const { error } = await supabase.from('trade_proposals').insert({
-      from_user: user.id,
-      to_user: friend.user_id,
-      give_codes: Array.from(giveSel),
-      receive_codes: Array.from(receiveSel),
+    const { error } = await supabase.rpc('create_trade', {
+      p_to_user: friend.user_id,
+      p_give_codes: Array.from(giveSel),
+      p_receive_codes: Array.from(receiveSel),
     })
     setSending(false)
     if (error) {
